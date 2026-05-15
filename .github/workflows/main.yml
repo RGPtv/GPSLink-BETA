@@ -1,0 +1,160 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. v1.1)'
+        required: true
+        default: 'v1.0'
+      prerelease:
+        description: 'Mark as pre-release?'
+        required: false
+        default: 'false'
+        type: choice
+        options: [ 'false', 'true' ]
+
+permissions:
+  contents: write
+
+# Cancel in-progress runs on the same branch to save runner minutes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '17'
+  APK_DEBUG_PATH: app/build/outputs/apk/debug/app-debug.apk
+  APK_RELEASE_DIR: app/build/outputs/apk/release
+
+jobs:
+  # ── Shared setup — validated once, reused by both jobs ───────────────────
+  validate:
+    name: Validate Gradle Wrapper
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gradle/actions/wrapper-validation@v4
+
+  # ── Debug build — auto on every push to main ─────────────────────────────
+  build_debug:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: gradle                   # built-in Gradle cache — faster than manual setup
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GPSLink-debug-${{ github.sha }}   # unique name per commit
+          path: ${{ env.APK_DEBUG_PATH }}
+          if-no-files-found: error                 # fail loudly if APK is missing
+          retention-days: 30
+
+  # ── Release build — only when manually triggered ──────────────────────────
+  build_release:
+    name: Build & Publish Release APK
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Decode keystore
+        run: |
+          printf '%s' "${{ secrets.KEYSTORE_BASE64 }}" \
+            | base64 --decode > "$RUNNER_TEMP/gpslink.keystore"
+        # printf avoids the trailing newline that `echo` adds, which can corrupt binary files
+
+      - name: Build Release APK
+        env:
+          STORE_FILE: ${{ runner.temp }}/gpslink.keystore
+          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease --stacktrace \
+            -Pandroid.injected.signing.store.file="$STORE_FILE" \
+            -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD"
+        # Secrets are passed via env vars so they don't appear in the shell history
+
+      - name: Verify APK signature
+        run: |
+          $ANDROID_SDK_ROOT/build-tools/$(ls "$ANDROID_SDK_ROOT/build-tools" | sort -V | tail -1)/apksigner \
+            verify --verbose \
+            "${{ env.APK_RELEASE_DIR }}/app-release.apk"
+
+      - name: Rename APK
+        id: apk
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          DEST="${{ env.APK_RELEASE_DIR }}/GPSLink-${VERSION}.apk"
+          mv "${{ env.APK_RELEASE_DIR }}/app-release.apk" "$DEST"
+          echo "path=$DEST" >> "$GITHUB_OUTPUT"
+          echo "name=GPSLink-${VERSION}.apk" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: GPSLink ${{ github.event.inputs.version }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          draft: false
+          body: |
+            ## GPSLink ${{ github.event.inputs.version }}
+
+            ### Installation
+            1. Download `${{ steps.apk.outputs.name }}` below
+            2. Enable **Install unknown apps** on your device
+            3. Go to **Developer Options → Mock Location App** → select GPSLink
+            4. Open the app and grant Location permission
+            5. Plug in your u-blox receiver via USB OTG and tap **Start**
+
+            ### Requirements
+            - Android 8.0+ (API 26)
+            - u-blox GNSS receiver (M7 / M8 / M9 / M10) via USB OTG
+
+            ### Verification
+            Build commit: ${{ github.sha }}
+          files: ${{ steps.apk.outputs.path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clean up keystore
+        if: always()           # runs even if previous steps fail
+        run: rm -f "$RUNNER_TEMP/gpslink.keystore"
