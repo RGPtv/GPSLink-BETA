@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- u-blox AG (VID 0x1546 = 5446 decimal) -->
+    <usb-device vendor-id="5446" product-id="423" />
+    <usb-device vendor-id="5446" product-id="424" />
+    <usb-device vendor-id="5446" product-id="425" />
+    <usb-device vendor-id="5446" product-id="426" />
+    <!-- Fallback: match any u-blox vendor -->
+    <usb-device vendor-id="5446" />
+</resources>

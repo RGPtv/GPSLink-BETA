@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GPSLink</string>
+    <string name="title_position">POSITION</string>
+    <string name="title_movement">MOVEMENT</string>
+    <string name="title_heading">HEADING</string>
+    <string name="title_satellite">SATELLITE</string>
+    <string name="title_serial_log">SERIAL LOG</string>
+    
+    <string name="label_latitude">LATITUDE</string>
+    <string name="label_longitude">LONGITUDE</string>
+    <string name="label_altitude">ALTITUDE MSL</string>
+    <string name="label_altitude_msl">metres above sea level</string>
+    <string name="label_speed">SPEED</string>
+    <string name="label_course">COURSE</string>
+    <string name="label_hdop">HDOP</string>
+    <string name="label_fix_type">FIX TYPE</string>
+    <string name="label_in_view">in view</string>
+    <string name="label_in_use">in use</string>
+    
+    <string name="btn_start">START</string>
+    <string name="btn_stop">STOP</string>
+    <string name="btn_close">CLOSE</string>
+    
+    <string name="msg_mock_provider">Set as Mock Location Provider in Developer Options</string>
+    <string name="msg_service_running">Service keeps running while notification is active</string>
+    <string name="msg_no_mock_provider">Mock Location NOT enabled for this app!</string>
+    <string name="btn_fix_mock">Open Developer Settings</string>
+    
+    <string name="conn_usb">USB Serial</string>
+    <string name="conn_bt">Bluetooth</string>
+</resources>

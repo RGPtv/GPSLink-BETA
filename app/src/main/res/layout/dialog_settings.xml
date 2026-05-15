@@ -1,0 +1,589 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@drawable/card_bg">
+
+    <!-- Title -->
+    <LinearLayout 
+        android:layout_width="match_parent" 
+        android:layout_height="wrap_content" 
+        android:orientation="horizontal" 
+        android:gravity="center_vertical" 
+        android:layout_marginBottom="20dp">
+        <ImageView 
+            android:layout_width="16dp" 
+            android:layout_height="16dp" 
+            android:src="@drawable/ic_settings" 
+            android:layout_marginEnd="10dp"
+            android:tint="@color/primary"/>
+        <TextView 
+            android:text="SETTINGS" 
+            android:textSize="12sp" 
+            android:fontFamily="monospace" 
+            android:textColor="@color/primary" 
+            android:textStyle="bold"
+            android:letterSpacing="0.15" 
+            android:layout_width="wrap_content" 
+            android:layout_height="wrap_content"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Connection Type section -->
+            <TextView 
+        android:text="CONNECTION TYPE" 
+        android:textSize="10sp" 
+        android:fontFamily="monospace" 
+        android:textColor="@color/text_dim" 
+        android:letterSpacing="0.12" 
+        android:layout_marginBottom="10dp" 
+        android:layout_width="wrap_content" 
+        android:layout_height="wrap_content"/>
+
+    <!-- USB option -->
+    <LinearLayout
+        android:id="@+id/optUsb"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/conn_option_selected"
+        android:padding="14dp"
+        android:layout_marginBottom="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground">
+
+        <LinearLayout 
+            android:layout_width="32dp" 
+            android:layout_height="32dp" 
+            android:background="@drawable/coord_cell_bg" 
+            android:gravity="center" 
+            android:layout_marginEnd="12dp">
+            <ImageView 
+                android:layout_width="16dp" 
+                android:layout_height="16dp" 
+                android:src="@drawable/ic_usb"
+                android:tint="@color/text_primary"/>
+        </LinearLayout>
+
+        <LinearLayout 
+            android:layout_width="0dp" 
+            android:layout_height="wrap_content" 
+            android:layout_weight="1" 
+            android:orientation="vertical">
+            <TextView 
+                android:text="@string/conn_usb" 
+                android:textSize="12sp" 
+                android:fontFamily="monospace" 
+                android:textStyle="bold" 
+                android:textColor="@color/text_primary" 
+                android:layout_width="wrap_content" 
+                android:layout_height="wrap_content"/>
+            <TextView 
+                android:text="NMEA 0183 via USB-OTG" 
+                android:textSize="10sp" 
+                android:textColor="@color/text_dim" 
+                android:layout_marginTop="2dp" 
+                android:layout_width="wrap_content" 
+                android:layout_height="wrap_content"/>
+        </LinearLayout>
+
+        <TextView 
+            android:id="@+id/badgeUsb" 
+            android:text="ACTIVE" 
+            android:textSize="8sp" 
+            android:fontFamily="monospace" 
+            android:textColor="@color/text_on_primary" 
+            android:background="@drawable/badge_active_bg" 
+            android:paddingStart="8dp" 
+            android:paddingEnd="8dp" 
+            android:paddingTop="3dp" 
+            android:paddingBottom="3dp" 
+            android:layout_width="wrap_content" 
+            android:layout_height="wrap_content"/>
+    </LinearLayout>
+
+    <!-- Bluetooth option -->
+    <LinearLayout
+        android:id="@+id/optBt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/conn_option_bg"
+        android:padding="14dp"
+        android:layout_marginBottom="16dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackground">
+
+        <LinearLayout 
+            android:layout_width="32dp" 
+            android:layout_height="32dp" 
+            android:background="@drawable/coord_cell_bg" 
+            android:gravity="center" 
+            android:layout_marginEnd="12dp">
+            <ImageView 
+                android:layout_width="16dp" 
+                android:layout_height="16dp" 
+                android:src="@drawable/ic_bluetooth"
+                android:tint="@color/text_primary"/>
+        </LinearLayout>
+
+        <LinearLayout 
+            android:layout_width="0dp" 
+            android:layout_height="wrap_content" 
+            android:layout_weight="1" 
+            android:orientation="vertical">
+            <TextView 
+                android:text="@string/conn_bt" 
+                android:textSize="12sp" 
+                android:fontFamily="monospace" 
+                android:textStyle="bold" 
+                android:textColor="@color/text_primary" 
+                android:layout_width="wrap_content" 
+                android:layout_height="wrap_content"/>
+            <TextView 
+                android:text="Classic RFCOMM / SPP" 
+                android:textSize="10sp" 
+                android:textColor="@color/text_dim" 
+                android:layout_marginTop="2dp" 
+                android:layout_width="wrap_content" 
+                android:layout_height="wrap_content"/>
+        </LinearLayout>
+
+        <TextView 
+            android:id="@+id/badgeBt" 
+            android:text="" 
+            android:textSize="8sp" 
+            android:fontFamily="monospace" 
+            android:textColor="@color/text_on_primary" 
+            android:paddingStart="8dp" 
+            android:paddingEnd="8dp" 
+            android:paddingTop="3dp" 
+            android:paddingBottom="3dp" 
+            android:layout_width="wrap_content" 
+            android:layout_height="wrap_content"/>
+    </LinearLayout>
+
+    <!-- BT Device Picker (visible when BT mode selected) -->
+    <LinearLayout
+        android:id="@+id/btDeviceSection"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginBottom="16dp">
+
+        <LinearLayout 
+            android:layout_width="match_parent" 
+            android:layout_height="wrap_content" 
+            android:orientation="horizontal" 
+            android:gravity="center_vertical" 
+            android:layout_marginBottom="10dp">
+            <TextView 
+                android:text="PAIRED DEVICES" 
+                android:textSize="10sp" 
+                android:fontFamily="monospace" 
+                android:textColor="@color/text_dim" 
+                android:letterSpacing="0.12" 
+                android:layout_width="0dp" 
+                android:layout_height="wrap_content" 
+                android:layout_weight="1"/>
+            <TextView 
+                android:id="@+id/tvBtOpenSettings" 
+                android:text="+ pair new" 
+                android:textSize="10sp" 
+                android:fontFamily="monospace" 
+                android:textColor="@color/primary" 
+                android:layout_width="wrap_content" 
+                android:layout_height="wrap_content"
+                android:clickable="true"
+                android:focusable="true"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btDeviceList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"/>
+
+        <TextView
+            android:id="@+id/tvBtEmpty"
+            android:text="No paired Bluetooth devices found.\nPair your GPS device in Android Settings first."
+            android:textSize="10sp"
+            android:fontFamily="monospace"
+            android:textColor="@color/text_dim"
+            android:visibility="gone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+        <LinearLayout
+            android:id="@+id/btSelectedRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/coord_cell_bg"
+            android:padding="12dp"
+            android:layout_marginTop="10dp"
+            android:visibility="gone">
+
+            <LinearLayout 
+                android:layout_width="0dp" 
+                android:layout_height="wrap_content" 
+                android:layout_weight="1" 
+                android:orientation="vertical">
+                <TextView 
+                    android:text="SELECTED" 
+                    android:textSize="9sp" 
+                    android:fontFamily="monospace" 
+                    android:textColor="@color/text_dim" 
+                    android:layout_marginBottom="2dp" 
+                    android:layout_width="wrap_content" 
+                    android:layout_height="wrap_content"/>
+                <TextView 
+                    android:id="@+id/tvBtSelected" 
+                    android:text="" 
+                    android:textSize="12sp" 
+                    android:textStyle="bold" 
+                    android:fontFamily="monospace" 
+                    android:textColor="@color/accent_emerald" 
+                    android:layout_width="wrap_content" 
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Update Rate section (USB only) -->
+    <LinearLayout 
+        android:id="@+id/hzSection" 
+        android:layout_width="match_parent" 
+        android:layout_height="wrap_content" 
+        android:orientation="vertical" 
+        android:layout_marginBottom="24dp">
+        <TextView 
+            android:text="UPDATE RATE" 
+            android:textSize="10sp" 
+            android:fontFamily="monospace" 
+            android:textColor="@color/text_dim" 
+            android:letterSpacing="0.12" 
+            android:layout_marginBottom="10dp" 
+            android:layout_width="wrap_content" 
+            android:layout_height="wrap_content"/>
+
+        <LinearLayout 
+            android:layout_width="match_parent" 
+            android:layout_height="48dp" 
+            android:orientation="horizontal" 
+            android:background="@drawable/hz_track_bg" 
+            android:padding="4dp">
+            <Button 
+                android:id="@+id/btn1Hz" 
+                android:text="1 Hz" 
+                android:textSize="13sp" 
+                android:fontFamily="monospace" 
+                android:layout_width="0dp" 
+                android:layout_height="match_parent" 
+                android:layout_weight="1" 
+                android:backgroundTint="@color/primary_variant" 
+                android:textColor="@color/text_on_primary" 
+                android:stateListAnimator="@null" 
+                android:insetTop="0dp" 
+                android:insetBottom="0dp"/>
+            <Button 
+                android:id="@+id/btn5Hz" 
+                android:text="5 Hz" 
+                android:textSize="13sp" 
+                android:fontFamily="monospace" 
+                android:layout_width="0dp" 
+                android:layout_height="match_parent" 
+                android:layout_weight="1" 
+                android:backgroundTint="@color/bg_main" 
+                android:textColor="@color/text_dim" 
+                android:stateListAnimator="@null" 
+                android:insetTop="0dp" 
+                android:insetBottom="0dp"/>
+        </LinearLayout>
+
+        <TextView 
+            android:id="@+id/tvHzNote" 
+            android:text="1 Hz &#183; 1 update per second" 
+            android:textSize="10sp" 
+            android:fontFamily="monospace" 
+            android:textColor="@color/text_dim" 
+            android:layout_marginTop="8dp" 
+            android:layout_width="wrap_content" 
+            android:layout_height="wrap_content"/>
+
+        <!-- Baud Rate sub-section (USB only) -->
+        <TextView 
+            android:text="BAUD RATE" 
+            android:textSize="10sp" 
+            android:fontFamily="monospace" 
+            android:textColor="@color/text_dim" 
+            android:letterSpacing="0.12" 
+            android:layout_marginTop="18dp" 
+            android:layout_marginBottom="10dp" 
+            android:layout_width="wrap_content" 
+            android:layout_height="wrap_content"/>
+
+        <!-- Row 1: 4800, 9600, 19200 -->
+        <LinearLayout 
+            android:layout_width="match_parent" 
+            android:layout_height="40dp" 
+            android:orientation="horizontal" 
+            android:background="@drawable/hz_track_bg" 
+            android:padding="3dp">
+            <Button 
+                android:id="@+id/btnBaud4800" 
+                android:text="4800" 
+                android:textSize="11sp" 
+                android:fontFamily="monospace" 
+                android:layout_width="0dp" 
+                android:layout_height="match_parent" 
+                android:layout_weight="1" 
+                android:layout_marginEnd="2dp"
+                android:backgroundTint="@color/bg_main" 
+                android:textColor="@color/text_dim" 
+                android:stateListAnimator="@null" 
+                android:insetTop="0dp" 
+                android:insetBottom="0dp"/>
+            <Button 
+                android:id="@+id/btnBaud9600" 
+                android:text="9600" 
+                android:textSize="11sp" 
+                android:fontFamily="monospace" 
+                android:layout_width="0dp" 
+                android:layout_height="match_parent" 
+                android:layout_weight="1" 
+                android:layout_marginEnd="2dp"
+                android:backgroundTint="@color/primary_variant" 
+                android:textColor="@color/text_on_primary" 
+                android:stateListAnimator="@null" 
+                android:insetTop="0dp" 
+                android:insetBottom="0dp"/>
+            <Button 
+                android:id="@+id/btnBaud19200" 
+                android:text="19200" 
+                android:textSize="11sp" 
+                android:fontFamily="monospace" 
+                android:layout_width="0dp" 
+                android:layout_height="match_parent" 
+                android:layout_weight="1" 
+                android:backgroundTint="@color/bg_main" 
+                android:textColor="@color/text_dim" 
+                android:stateListAnimator="@null" 
+                android:insetTop="0dp" 
+                android:insetBottom="0dp"/>
+        </LinearLayout>
+
+        <!-- Row 2: 38400, 57600, 115200 -->
+        <LinearLayout 
+            android:layout_width="match_parent" 
+            android:layout_height="40dp" 
+            android:orientation="horizontal" 
+            android:background="@drawable/hz_track_bg" 
+            android:padding="3dp"
+            android:layout_marginTop="4dp">
+            <Button 
+                android:id="@+id/btnBaud38400" 
+                android:text="38400" 
+                android:textSize="11sp" 
+                android:fontFamily="monospace" 
+                android:layout_width="0dp" 
+                android:layout_height="match_parent" 
+                android:layout_weight="1" 
+                android:layout_marginEnd="2dp"
+                android:backgroundTint="@color/bg_main" 
+                android:textColor="@color/text_dim" 
+                android:stateListAnimator="@null" 
+                android:insetTop="0dp" 
+                android:insetBottom="0dp"/>
+            <Button 
+                android:id="@+id/btnBaud57600" 
+                android:text="57600" 
+                android:textSize="11sp" 
+                android:fontFamily="monospace" 
+                android:layout_width="0dp" 
+                android:layout_height="match_parent" 
+                android:layout_weight="1" 
+                android:layout_marginEnd="2dp"
+                android:backgroundTint="@color/bg_main" 
+                android:textColor="@color/text_dim" 
+                android:stateListAnimator="@null" 
+                android:insetTop="0dp" 
+                android:insetBottom="0dp"/>
+            <Button 
+                android:id="@+id/btnBaud115200" 
+                android:text="115200" 
+                android:textSize="11sp" 
+                android:fontFamily="monospace" 
+                android:layout_width="0dp" 
+                android:layout_height="match_parent" 
+                android:layout_weight="1" 
+                android:backgroundTint="@color/bg_main" 
+                android:textColor="@color/text_dim" 
+                android:stateListAnimator="@null" 
+                android:insetTop="0dp" 
+                android:insetBottom="0dp"/>
+        </LinearLayout>
+
+        <TextView 
+            android:id="@+id/tvBaudNote" 
+            android:text="9600 baud &#183; default for u-blox receivers" 
+            android:textSize="10sp" 
+            android:fontFamily="monospace" 
+            android:textColor="@color/text_dim" 
+            android:layout_marginTop="8dp" 
+            android:layout_width="wrap_content" 
+            android:layout_height="wrap_content"/>
+    </LinearLayout>
+
+    <!-- NTRIP section -->
+    <LinearLayout 
+        android:id="@+id/ntripSection" 
+        android:layout_width="match_parent" 
+        android:layout_height="wrap_content" 
+        android:orientation="vertical" 
+        android:layout_marginBottom="24dp">
+        <TextView 
+            android:text="NTRIP SERVER" 
+            android:textSize="10sp" 
+            android:fontFamily="monospace" 
+            android:textColor="@color/text_dim" 
+            android:letterSpacing="0.12" 
+            android:layout_marginBottom="10dp" 
+            android:layout_width="wrap_content" 
+            android:layout_height="wrap_content"/>
+
+        <LinearLayout 
+            android:layout_width="match_parent" 
+            android:layout_height="wrap_content" 
+            android:orientation="horizontal" 
+            android:gravity="center_vertical"
+            android:background="@drawable/conn_option_bg"
+            android:padding="14dp">
+
+            <LinearLayout 
+                android:layout_width="0dp" 
+                android:layout_height="wrap_content" 
+                android:layout_weight="1" 
+                android:orientation="vertical">
+                <TextView 
+                    android:text="Enable NTRIP" 
+                    android:textSize="12sp" 
+                    android:fontFamily="monospace" 
+                    android:textStyle="bold" 
+                    android:textColor="@color/text_primary" 
+                    android:layout_width="wrap_content" 
+                    android:layout_height="wrap_content"/>
+                <TextView 
+                    android:text="Receive RTK corrections" 
+                    android:textSize="10sp" 
+                    android:textColor="@color/text_dim" 
+                    android:layout_marginTop="2dp" 
+                    android:layout_width="wrap_content" 
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switchNtrip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- NTRIP Connection fields -->
+        <LinearLayout
+            android:id="@+id/ntripFields"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:padding="14dp"
+            android:background="@drawable/coord_cell_bg"
+            android:layout_marginTop="8dp">
+
+            <EditText
+                android:id="@+id/etNtripHost"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Host (e.g. rtk2go.com)"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_dim"/>
+
+            <EditText
+                android:id="@+id/etNtripPort"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Port (e.g. 2101)"
+                android:inputType="number"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_dim"/>
+
+            <EditText
+                android:id="@+id/etNtripMountpoint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Mountpoint"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_dim"/>
+
+            <EditText
+                android:id="@+id/etNtripUser"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Username"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_dim"/>
+
+            <EditText
+                android:id="@+id/etNtripPass"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Password"
+                android:inputType="textPassword"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:textColor="@color/text_primary"
+                android:textColorHint="@color/text_dim"/>
+        </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+    </ScrollView>
+
+    <!-- Close button -->
+    <Button
+        android:id="@+id/btnCloseSettings"
+        android:text="@string/btn_close"
+        android:textSize="13sp"
+        android:fontFamily="monospace"
+        android:textStyle="bold"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:backgroundTint="@color/bg_main"
+        android:textColor="@color/text_primary"
+        android:stateListAnimator="@null"/>
+
+</LinearLayout>
