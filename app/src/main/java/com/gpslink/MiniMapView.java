@@ -2,7 +2,6 @@ package com.gpslink;
 
 import android.app.UiModeManager;
 import android.content.Context;
-import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
@@ -12,7 +11,7 @@ import android.view.View;
 import android.view.ViewOutlineProvider;
 import android.widget.FrameLayout;
 
-import org.osmdroid.config.Configuration;
+// osmdroid Configuration accessed via fully-qualified name to avoid clash with android.content.res.Configuration
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.util.MapTileIndex;
@@ -283,9 +282,10 @@ public class MiniMapView extends FrameLayout {
                 if (nightMode == UiModeManager.MODE_NIGHT_NO) return false;
             }
             // Also check current Configuration for UI_MODE_NIGHT_YES
-            int uiMode = getContext().getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
-            if (uiMode == Configuration.UI_MODE_NIGHT_YES) return true;
-            if (uiMode == Configuration.UI_MODE_NIGHT_NO) return false;
+            int uiMode = getContext().getResources().getConfiguration().uiMode
+                    & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+            if (uiMode == android.content.res.Configuration.UI_MODE_NIGHT_YES) return true;
+            if (uiMode == android.content.res.Configuration.UI_MODE_NIGHT_NO) return false;
         } catch (Exception ignored) {}
         // Fallback: hour-based heuristic
         int hour = java.time.LocalTime.now().getHour();
