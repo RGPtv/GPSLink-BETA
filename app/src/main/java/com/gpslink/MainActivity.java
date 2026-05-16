@@ -76,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean isReceiverRegistered = false;
     private boolean isSerialExpanded = false;
     private boolean isNtripEnabled = false;
+    private boolean isNtripUseTls = false;
     private String ntripHost = "";
     private String ntripPort = "2101";
     private String ntripMountpoint = "";
@@ -98,6 +99,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_NTRIP_MOUNTPOINT = "ntripMountpoint";
     private static final String KEY_NTRIP_USER = "ntripUser";
     private static final String KEY_NTRIP_PASS = "ntripPass";
+    private static final String KEY_NTRIP_USE_TLS = "ntripUseTls";
 
     private void saveSettings() {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
@@ -115,6 +117,7 @@ public class MainActivity extends AppCompatActivity {
                 .putString(KEY_NTRIP_MOUNTPOINT, ntripMountpoint)
                 .putString(KEY_NTRIP_USER, ntripUser)
                 .putString(KEY_NTRIP_PASS, ntripPass)
+                .putBoolean(KEY_NTRIP_USE_TLS, isNtripUseTls)
                 .apply();
     }
 
@@ -135,6 +138,7 @@ public class MainActivity extends AppCompatActivity {
         ntripMountpoint = prefs.getString(KEY_NTRIP_MOUNTPOINT, "");
         ntripUser = prefs.getString(KEY_NTRIP_USER, "");
         ntripPass = prefs.getString(KEY_NTRIP_PASS, "");
+        isNtripUseTls = prefs.getBoolean(KEY_NTRIP_USE_TLS, false);
     }
 
     // -- Broadcast receiver ----------------------------------------------------
@@ -1023,7 +1027,7 @@ public class MainActivity extends AppCompatActivity {
             String slog = btRunning ? BluetoothGpsService.lastSerialLog : UsbSerialService.lastSerialLog;
             String sView = btRunning ? BluetoothGpsService.lastSatsInView : UsbSerialService.lastSatsInView;
             String sUsed = btRunning ? BluetoothGpsService.lastSatsUsed : UsbSerialService.lastSatsUsed;
-            long bytes = btRunning ? BluetoothGpsService.totalBytes : UsbSerialService.totalBytes.get();
+            long bytes = btRunning ? BluetoothGpsService.totalBytes.get() : UsbSerialService.totalBytes.get();
             int sents = btRunning ? BluetoothGpsService.totalSents : UsbSerialService.totalSents;
             long ft = btRunning ? BluetoothGpsService.lastFixTime : UsbSerialService.lastFixTime;
             updateConnection(conn);
@@ -1108,7 +1112,7 @@ public class MainActivity extends AppCompatActivity {
             BluetoothGpsService.lastSatellites = EM_DASH;
             BluetoothGpsService.lastSatsInView = EM_DASH;
             BluetoothGpsService.lastSatsUsed = EM_DASH;
-            BluetoothGpsService.totalBytes = 0;
+            BluetoothGpsService.totalBytes.set(0);
             BluetoothGpsService.totalSents = 0;
             BluetoothGpsService.lastFixTime = 0;
             BluetoothGpsService.lastConstellationJson = "";
@@ -1130,6 +1134,13 @@ public class MainActivity extends AppCompatActivity {
                     Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
                 missingPermissions.add(Manifest.permission.BLUETOOTH_CONNECT);
                 missingPermissions.add(Manifest.permission.BLUETOOTH_SCAN);
+            }
+        }
+        // [I1] Android 13+ requires POST_NOTIFICATIONS for foreground service notifications
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(this,
+                    Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                missingPermissions.add(Manifest.permission.POST_NOTIFICATIONS);
             }
         }
         if (!missingPermissions.isEmpty()) {

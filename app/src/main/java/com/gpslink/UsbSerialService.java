@@ -4,7 +4,6 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -28,7 +27,6 @@ import com.hoho.android.usbserial.util.SerialInputOutputManager;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Executors;
@@ -439,7 +437,13 @@ public class UsbSerialService extends AbstractGpsService implements SerialInputO
             wakeLock.acquire(10L * 60 * 60 * 1000); // 10-hour cap
         }
         String notificationText = (wasRunning && serialPort != null) ? lastConn : "Connecting...";
-        startForeground(NOTIFICATION_ID, buildNotification(notificationText));
+        // [I2] Android 14+ requires foregroundServiceType parameter
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(NOTIFICATION_ID, buildNotification(notificationText),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification(notificationText));
+        }
         startConnectThread();
         return START_STICKY;
     }

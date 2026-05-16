@@ -13,7 +13,6 @@ import android.util.Log;
 import java.util.ArrayDeque;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -297,17 +296,19 @@ abstract class AbstractGpsService extends Service {
             }
             // Do NOT push location here — GSA doesn't update lat/lon.
             long now = System.currentTimeMillis();
-            if (now - getLastBroadcastTime() > 200) { broadcastAll(); }
+            if (now - getLastBroadcastTime() > 200) { broadcastAll(); setLastBroadcastTime(now); }
         } else if ("VTG".equals(d.type)) {
             speed   = d.speed;
             bearing = d.bearing;
             // FIX: do NOT push location here — VTG doesn't update lat/lon.
             long now = System.currentTimeMillis();
-            if (now - getLastBroadcastTime() > 200) { broadcastAll(); }
+            if (now - getLastBroadcastTime() > 200) { broadcastAll(); setLastBroadcastTime(now); }
         } else if ("GST".equals(d.type)) {
             gstAccuracy = d.accuracy;
             lastGstTime = System.currentTimeMillis();
-            broadcastAll();
+            // [B2] Apply 200ms debounce to GST like all other sentence types
+            long now = System.currentTimeMillis();
+            if (now - getLastBroadcastTime() > 200) { broadcastAll(); setLastBroadcastTime(now); }
         }
     }
 

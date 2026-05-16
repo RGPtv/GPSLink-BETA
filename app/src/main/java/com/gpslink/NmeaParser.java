@@ -156,8 +156,10 @@ public class NmeaParser {
 
         d.latitude  = parseLatLon(p[3], p[4]);
         d.longitude = parseLatLon(p[5], p[6]);
-        d.speed     = p[7].isEmpty() ? 0f : parseFloatSafe(p[7]) * 0.514444f;
-        d.bearing   = p[8].isEmpty() ? 0f : parseFloatSafe(p[8]);
+        float rawSpeed = parseFloatSafe(p[7]);
+        d.speed     = (p[7].isEmpty() || Float.isNaN(rawSpeed)) ? 0f : rawSpeed * 0.514444f;
+        float rawBearing = parseFloatSafe(p[8]);
+        d.bearing   = (p[8].isEmpty() || Float.isNaN(rawBearing)) ? 0f : rawBearing;
         d.gpsTimeMs = parseGpsTime(p[1], p.length > 9 ? p[9] : "");
         d.valid     = true;
         return d;
@@ -188,7 +190,9 @@ public class NmeaParser {
         d.fixMode = fixMode;
         // [Dead-2] pdop/vdop assignments removed — fields no longer exist
         // p.length==17 means no VDOP field; read HDOP from p[15]
-        d.hdop    = (p.length >= 18) ? parseFloatSafe(p[16]) : parseFloatSafe(p[15]);
+        // [B7] Guard against NaN from parseFloatSafe — default to 99.0f (no DOP)
+        float rawHdop = (p.length >= 18) ? parseFloatSafe(p[16]) : parseFloatSafe(p[15]);
+        d.hdop    = Float.isNaN(rawHdop) ? 99.0f : rawHdop;
 
         // FIX: use the same realistic multiplier as GGA so both sources agree.
         d.accuracy = Math.max(1.0f, d.hdop * 4.0f);
@@ -218,13 +222,16 @@ public class NmeaParser {
 
         GpsData d = new GpsData();
         d.type    = "VTG";
-        d.bearing = p[1].isEmpty() ? 0f : parseFloatSafe(p[1]);
+        float vtgBearing = parseFloatSafe(p[1]);
+        d.bearing = (p[1].isEmpty() || Float.isNaN(vtgBearing)) ? 0f : vtgBearing;
 
         // Prefer km/h field (7) → convert to m/s; fallback to knots field (5)
         if (!p[7].isEmpty()) {
-            d.speed = parseFloatSafe(p[7]) / 3.6f; // km/h → m/s
+            float kmh = parseFloatSafe(p[7]);
+            d.speed = Float.isNaN(kmh) ? 0f : kmh / 3.6f; // km/h → m/s
         } else if (!p[5].isEmpty()) {
-            d.speed = parseFloatSafe(p[5]) * 0.514444f; // knots → m/s
+            float kn = parseFloatSafe(p[5]);
+            d.speed = Float.isNaN(kn) ? 0f : kn * 0.514444f; // knots → m/s
         }
 
         d.valid = true;

@@ -4,7 +4,6 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
@@ -28,11 +27,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeoutException;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.Collections;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class BluetoothGpsService extends AbstractGpsService {
 
@@ -62,7 +61,7 @@ public class BluetoothGpsService extends AbstractGpsService {
     public static volatile String  lastSatsUsed          = "\u2014";
     public static volatile String  lastHeading           = "0\u00B0";
     public static volatile String  lastConstellationJson = "";
-    public static volatile long    totalBytes            = 0;
+    public static final AtomicLong totalBytes            = new AtomicLong(0);
     public static volatile int     totalSents            = 0;
     private static volatile long   lastBroadcastTime     = 0;
     public static volatile long    lastFixTime           = 0;
@@ -95,7 +94,7 @@ public class BluetoothGpsService extends AbstractGpsService {
     @Override protected long getLastBroadcastTime()       { return lastBroadcastTime; }
     @Override protected void setLastBroadcastTime(long t) { lastBroadcastTime = t; }
     @Override protected void setLastConn(String v)        { lastConn = v; }
-    @Override protected long getTotalBytes()               { return totalBytes; }
+    @Override protected long getTotalBytes()               { return totalBytes.get(); }
     @Override protected int  getTotalSents()               { return totalSents; }
     @Override protected void setTotalSents(int v)          { totalSents = v; }
     @Override protected String getLastSerialLog()          { return lastSerialLog; }
@@ -165,7 +164,7 @@ public class BluetoothGpsService extends AbstractGpsService {
                     .putExtra("satellites",        lastSatellites)
                     .putExtra("constellationJson", lastConstellationJson)
                     .putExtra("ntripStatus",       lastNtripStatus)
-                    .putExtra("bytes",             totalBytes)
+                    .putExtra("bytes",             totalBytes.get())
                     .putExtra("sents",             totalSents));
         }
     }
@@ -228,7 +227,7 @@ public class BluetoothGpsService extends AbstractGpsService {
             }
             if (!wasRunning) {
                 synchronized (STATE_LOCK) {
-                    totalBytes  = 0;
+                    totalBytes.set(0);
                     totalSents  = 0;
                     lastFixTime = 0;
                     retryCount  = 0;
@@ -251,7 +250,13 @@ public class BluetoothGpsService extends AbstractGpsService {
             wakeLock.acquire(10L * 60 * 60 * 1000);
         }
 
-        startForeground(NOTIFICATION_ID, buildNotification("Connecting to " + connectedDevName + "..."));
+        // [I2] Android 14+ requires foregroundServiceType parameter
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(NOTIFICATION_ID, buildNotification("Connecting to " + connectedDevName + "..."),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification("Connecting to " + connectedDevName + "..."));
+        }
         startConnectThread();
         return START_STICKY;
     }
@@ -498,7 +503,7 @@ public class BluetoothGpsService extends AbstractGpsService {
 
     private void onNewData(byte[] data, int length) {
         synchronized (nmeaLock) {
-            totalBytes += length;
+            totalBytes.addAndGet(length);
             nmeaBuffer.append(new String(data, 0, length, StandardCharsets.ISO_8859_1));
             int idx;
             while ((idx = nmeaBuffer.indexOf("\n")) >= 0) {
