@@ -1049,6 +1049,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void resetCards() {
         tvConnection.setText("Idle");
+        tvNtripStatus.setText(EM_DASH);
         if ("bt".equals(connType) && !selectedBtName.isEmpty()) {
             tvLocation.setText(selectedBtName);
         } else {
