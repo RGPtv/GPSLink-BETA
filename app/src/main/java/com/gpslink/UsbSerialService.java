@@ -1,4 +1,4 @@
-package com.gpslink;
+﻿package com.gpslink;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -42,7 +42,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class UsbSerialService extends Service implements SerialInputOutputManager.Listener {
+public class UsbSerialService extends AbstractGpsService implements SerialInputOutputManager.Listener {
 
     private static final String TAG              = "GPSlink";
     public  static final String CHANNEL_ID       = "GPS_Link";
@@ -56,13 +56,10 @@ public class UsbSerialService extends Service implements SerialInputOutputManage
 
     private static final int[]  SUPPORTED_HZ     = {1, 5}; // P3-2: 10 removed; not exposed in UI
     public  static final int[]  SUPPORTED_BAUD   = {4800, 9600, 19200, 38400, 57600, 115200};
-    private static final int    SERIAL_LOG_MAX   = 12;
+    // SERIAL_LOG_MAX, MAX_AUTO_RETRIES, RETRY_DELAY_MS, STALE_FIX_MS inherited from AbstractGpsService
     private static final int    UBLOX_VID        = 0x1546;
     private static final int[]  UBLOX_PIDS       = {0x01A7, 0x01A8, 0x01A9, 0x01AA};
-    private static final int    DEFAULT_BAUD     = 9600;
-    private static final int    MAX_AUTO_RETRIES = 10;
-    private static final long   RETRY_DELAY_MS   = 3_000;
-    private static final long   STALE_FIX_MS     = 10_000;
+    private static final int    DEFAULT_BAUD      = 9600;
 
     // -- Shared state (guarded by STATE_LOCK where noted) ----------------------
     public static final Object STATE_LOCK = new Object();
@@ -87,7 +84,7 @@ public class UsbSerialService extends Service implements SerialInputOutputManage
     public static volatile String  lastNtripStatus      = "";
 
     // -- Instance fields -------------------------------------------------------
-    private LocationManager           locationManager;
+    // locationManager inherited as protected from AbstractGpsService
     private PowerManager.WakeLock     wakeLock;
     private volatile SerialInputOutputManager ioManager;
     private volatile UsbSerialPort            serialPort;
@@ -97,33 +94,39 @@ public class UsbSerialService extends Service implements SerialInputOutputManage
     private final AtomicBoolean       connecting       = new AtomicBoolean(false);
     private ScheduledExecutorService  retryExecutor;
     private NtripClient               ntripClient;
-    private int                       ubxWriteFailCount    = 0;
-    private static final int          UBX_MAX_FAIL         = 3;
-    // [Impr-9] Incremental serial log builder
-    private final StringBuilder       serialLogBuilder     = new StringBuilder();
+    private int                       ubxWriteFailCount = 0;
+    private static final int          UBX_MAX_FAIL      = 3;
+    // NMEA parse state (nmeaBuffer, serialLines, nmeaLock, GPS fields, sat maps)
+    // all inherited as protected from AbstractGpsService.
 
-    // NMEA parsing: all fields below are only accessed inside nmeaLock.
-    private final StringBuilder      nmeaBuffer  = new StringBuilder(512);
-    private final ArrayDeque<String> serialLines = new ArrayDeque<>();
-    private final Object             nmeaLock    = new Object();
+    // -- Abstract method implementations (bridge to public static volatile fields) --
 
-    private double  latitude = 0, longitude = 0, altitude = 0;
-    private boolean hasPosition = false; // [Bug-4] explicit position flag
-    private float   speed = 0, bearing = 0, accuracy = 5.0f, hdop = 99.0f;
-    private int     satellites = 0, fixQuality = 0, fixMode = 1;
-    private int     noFixCount = 0; // consecutive GSA no-fix reports before clearing state
-    private long    gpsTimeMs  = 0;
-    private boolean hasGGA = false, hasRMC = false;
-    private float   gstAccuracy = -1.0f;
-    private long    lastGstTime = 0;
-    private float   diffAge = -1.0f;
-    private String  refStationId = "";
+    @Override protected String getTag()          { return TAG; }
+    @Override protected Object getStateLock()    { return STATE_LOCK; }
+    @Override protected String getActionStatus() { return ACTION_STATUS; }
 
-    private final Map<String, NmeaParser.SatInfo> seenSats = new LinkedHashMap<>();
-    private final Map<String, Integer> gsvReportedTotal    = new LinkedHashMap<>();
-    private final Map<String, java.util.Set<String>> gsvCurrentCyclePrns = new LinkedHashMap<>();
-    private int     satsTrackedCount = 0;
-    private boolean hasGGASatCount   = false;
+    @Override protected long getLastFixTime()          { return lastFixTime; }
+    @Override protected void setLastFixTime(long t)    { lastFixTime = t; }
+    @Override protected long getLastBroadcastTime()    { return lastBroadcastTime; }
+    @Override protected void setLastBroadcastTime(long t) { lastBroadcastTime = t; }
+    @Override protected void setLastConn(String v)     { lastConn = v; }
+    @Override protected long getTotalBytes()            { return totalBytes; }
+    @Override protected int  getTotalSents()            { return totalSents; }
+    @Override protected void setTotalSents(int v)       { totalSents = v; }
+    @Override protected String getLastSerialLog()       { return lastSerialLog; }
+    @Override protected void   setLastSerialLog(String v)       { lastSerialLog = v; }
+    @Override protected String getLastSatellites()              { return lastSatellites; }
+    @Override protected void   setLastSatellites(String v)      { lastSatellites = v; }
+    @Override protected String getLastSatsInView()              { return lastSatsInView; }
+    @Override protected void   setLastSatsInView(String v)      { lastSatsInView = v; }
+    @Override protected String getLastSatsUsed()                { return lastSatsUsed; }
+    @Override protected void   setLastSatsUsed(String v)        { lastSatsUsed = v; }
+    @Override protected String getLastConstellationJson()       { return lastConstellationJson; }
+    @Override protected void   setLastConstellationJson(String v) { lastConstellationJson = v; }
+    @Override protected String getLastNtripStatus()             { return lastNtripStatus; }
+
+    /** kept concrete: startIo wraps USB connect/start. */
+    @Override protected void startIo() { startConnectThread(); }
 
     // -- UBX packet builders ---------------------------------------------------
 
@@ -245,7 +248,7 @@ public class UsbSerialService extends Service implements SerialInputOutputManage
         @Override
         public void onReceive(Context ctx, Intent intent) {
             if (!ACTION_NTRIP_CONFIG_CHANGED.equals(intent.getAction())) return;
-            Log.d(TAG, "NTRIP config changed — restarting NtripClient");
+            Log.d(TAG, "NTRIP config changed â€” restarting NtripClient");
             synchronized (UsbSerialService.this) {
                 if (ntripClient != null) { ntripClient.stop(); ntripClient = null; }
             }
@@ -472,31 +475,139 @@ public class UsbSerialService extends Service implements SerialInputOutputManage
 
     // -- UBX configuration -----------------------------------------------------
 
+    /**
+     * [PossIss-4] Polls the serial port for a UBX-ACK-ACK (0x05/0x01) or
+     * UBX-ACK-NAK (0x05/0x00) frame that references the given msgClass/msgId.
+     *
+     * Called before SerialInputOutputManager is started, so we read directly
+     * from the open UsbSerialPort rather than going through onNewData().
+     *
+     * @param msgClass  UBX class byte of the command we are waiting to be ACK'd
+     * @param msgId     UBX id byte of the command we are waiting to be ACK'd
+     * @param timeoutMs maximum time to wait in milliseconds
+     * @return true on ACK-ACK, false on ACK-NAK or timeout
+     */
+    private boolean waitForUbxAck(byte msgClass, byte msgId, long timeoutMs) {
+        UsbSerialPort port = serialPort; // local snapshot â€” avoids race with stopIo()
+        if (port == null) return false;
+
+        // A UBX frame is: sync1(B5) sync2(62) cls(05) id(01|00) len_lo(02)
+        //                 len_hi(00) ackCls ackId ckA ckB  â€” 10 bytes total.
+        // We walk byte-by-byte through incoming data rather than assuming
+        // frame boundaries align with read() call boundaries.
+        final int BUF = 256; // enough to drain any NMEA chatter between writes
+        byte[] buf = new byte[BUF];
+
+        // Parser state for the minimal UBX-ACK frame
+        int  state    = 0;   // position inside the expected frame header
+        byte clsField = 0;   // cls byte of the pending ACK frame (always 0x05)
+        byte idField  = 0;   // id byte: 0x01=ACK, 0x00=NAK
+        long deadline = System.currentTimeMillis() + timeoutMs;
+
+        while (System.currentTimeMillis() < deadline) {
+            int n;
+            try {
+                // Use remaining budget as the per-call read timeout.
+                long remaining = deadline - System.currentTimeMillis();
+                if (remaining <= 0) break;
+                n = port.read(buf, (int) Math.min(remaining, 100));
+            } catch (IOException e) {
+                Log.w(TAG, "waitForUbxAck: read error â€” " + e.getMessage());
+                return false;
+            }
+            if (n <= 0) continue; // timeout slice elapsed, loop and re-check deadline
+
+            // Walk every received byte through the frame state machine.
+            for (int i = 0; i < n; i++) {
+                byte b = buf[i];
+                switch (state) {
+                    case 0: if (b == (byte) 0xB5) state = 1; break;          // sync1
+                    case 1: state = (b == (byte) 0x62) ? 2 : (b == (byte) 0xB5 ? 1 : 0); break; // sync2
+                    case 2: clsField = b; state = (b == (byte) 0x05) ? 3 : 0; break; // cls=0x05
+                    case 3: idField  = b; state = 4; break;                   // id: 0x01 ACK / 0x00 NAK
+                    case 4: state = (b == 0x02) ? 5 : 0; break;              // len_lo=2
+                    case 5: state = (b == 0x00) ? 6 : 0; break;              // len_hi=0
+                    case 6: // ackCls â€” the class of the command being ACK'd
+                        if (b == msgClass) { state = 7; }
+                        else              { state = 0; } // ACK for a different command
+                        break;
+                    case 7: // ackId â€” the id of the command being ACK'd
+                        if (b == msgId) {
+                            // Frame matched: check whether it was ACK or NAK
+                            boolean ack = (idField == (byte) 0x01);
+                            return ack; // checksum bytes skipped â€” we trust the port framing
+                        }
+                        state = 0; // id mismatch â€” keep scanning
+                        break;
+                    default: state = 0;
+                }
+            }
+        }
+        return false; // deadline exceeded without a matching ACK
+    }
+
     private void configureUblox() {
-        try { Thread.sleep(600); } catch (InterruptedException ignored) {}
-        sendUbx(ubxCfgRate(currentHz));
+        // [PossIss-4] Every sendUbx() is immediately followed by waitForUbxAck()
+        // so the driver blocks only as long as the module needs (â‰¤500 ms each)
+        // rather than using fixed-duration sleep() calls.
+
+        // Set measurement / navigation rate
+        sendUbx(ubxCfgRate(currentHz)); // CFG-RATE: class 0x06, id 0x08
+        if (!waitForUbxAck((byte) 0x06, (byte) 0x08, 500)) {
+            Log.w(TAG, "CFG-RATE ACK timeout or NAK â€” rate may not have applied");
+        }
 
         // Enable all constellations (M7 silently ignores Galileo/BeiDou blocks)
-        sendUbx(ubxCfgGnss());
-        try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+        sendUbx(ubxCfgGnss()); // CFG-GNSS: class 0x06, id 0x3E
+        if (!waitForUbxAck((byte) 0x06, (byte) 0x3E, 500)) {
+            Log.w(TAG, "CFG-GNSS ACK timeout or NAK â€” constellation config may be incomplete");
+        }
 
         // Enable SBAS (MSAS has partial Philippines coverage; others auto-scanned)
-        sendUbx(ubxCfgSbas());
-        try { Thread.sleep(100); } catch (InterruptedException ignored) {}
+        sendUbx(ubxCfgSbas()); // CFG-SBAS: class 0x06, id 0x16
+        if (!waitForUbxAck((byte) 0x06, (byte) 0x16, 500)) {
+            Log.w(TAG, "CFG-SBAS ACK timeout or NAK â€” SBAS may be disabled");
+        }
 
+        // NMEA message enable/disable â€” CFG-MSG (class 0x06, id 0x01).
+        // Each call re-uses the same class/id so ACK polling uses those bytes.
         sendUbx(ubxCfgMsg(0xF0, 0x41, 0)); // disable GPTXT
+        if (!waitForUbxAck((byte) 0x06, (byte) 0x01, 500)) {
+            Log.w(TAG, "CFG-MSG(GPTXT) ACK timeout or NAK");
+        }
         sendUbx(ubxCfgMsg(0xF0, 0x01, 0)); // disable GLL
+        if (!waitForUbxAck((byte) 0x06, (byte) 0x01, 500)) {
+            Log.w(TAG, "CFG-MSG(GLL) ACK timeout or NAK");
+        }
         sendUbx(ubxCfgMsg(0xF0, 0x05, 0)); // disable VTG
+        if (!waitForUbxAck((byte) 0x06, (byte) 0x01, 500)) {
+            Log.w(TAG, "CFG-MSG(VTG) ACK timeout or NAK");
+        }
         sendUbx(ubxCfgMsg(0xF0, 0x00, 1)); // GGA on
+        if (!waitForUbxAck((byte) 0x06, (byte) 0x01, 500)) {
+            Log.w(TAG, "CFG-MSG(GGA) ACK timeout or NAK");
+        }
         sendUbx(ubxCfgMsg(0xF0, 0x04, 1)); // RMC on
-        // GSA must be ON — it is the authoritative source of 2D/3D fix mode and
+        if (!waitForUbxAck((byte) 0x06, (byte) 0x01, 500)) {
+            Log.w(TAG, "CFG-MSG(RMC) ACK timeout or NAK");
+        }
+        // GSA must be ON â€” it is the authoritative source of 2D/3D fix mode and
         // DOP values. Disabling it left fixMode stuck at 1 (no fix), causing the
         // fix type label to flicker between "No fix" and "GPS" on every GGA.
         sendUbx(ubxCfgMsg(0xF0, 0x02, 1)); // GSA on
-        sendUbx(ubxCfgMsg(0xF0, 0x03, 1)); // GSV on  (all constellations)
+        if (!waitForUbxAck((byte) 0x06, (byte) 0x01, 500)) {
+            Log.w(TAG, "CFG-MSG(GSA) ACK timeout or NAK");
+        }
+        sendUbx(ubxCfgMsg(0xF0, 0x03, 1)); // GSV on (all constellations)
+        if (!waitForUbxAck((byte) 0x06, (byte) 0x01, 500)) {
+            Log.w(TAG, "CFG-MSG(GSV) ACK timeout or NAK");
+        }
 
         // Save config to flash so it survives power cycles
-        sendUbx(ubxCfgCfg());
+        sendUbx(ubxCfgCfg()); // CFG-CFG: class 0x06, id 0x09
+        if (!waitForUbxAck((byte) 0x06, (byte) 0x09, 500)) {
+            Log.w(TAG, "CFG-CFG ACK timeout or NAK â€” config may not be persisted");
+        }
         Log.d(TAG, "UBX configured at " + currentHz + " Hz with multi-constellation + SBAS");
     }
 
@@ -522,7 +633,7 @@ public class UsbSerialService extends Service implements SerialInputOutputManage
             ubxWriteFailCount++;
             Log.w(TAG, "UBX write failed (" + ubxWriteFailCount + "/" + UBX_MAX_FAIL + "): " + e.getMessage());
             if (ubxWriteFailCount >= UBX_MAX_FAIL) {
-                Log.e(TAG, "UBX write failed " + UBX_MAX_FAIL + " times — triggering reconnect");
+                Log.e(TAG, "UBX write failed " + UBX_MAX_FAIL + " times â€” triggering reconnect");
                 ubxWriteFailCount = 0;
                 stopIo();
                 onRunError(new java.io.IOException("UBX write failed " + UBX_MAX_FAIL + " times"));
@@ -601,7 +712,7 @@ public class UsbSerialService extends Service implements SerialInputOutputManage
                     true, true, true, power, acc);
             locationManager.setTestProviderEnabled(p, true);
         } catch (SecurityException se) {
-            Log.e(TAG, "MOCK_LOCATION permission denied for " + p + " — GPS injection disabled");
+            Log.e(TAG, "MOCK_LOCATION permission denied for " + p + " â€” GPS injection disabled");
         } catch (Exception e) {
             Log.w(TAG, "addTestProvider " + p + ": " + e.getMessage());
         }
@@ -618,11 +729,7 @@ public class UsbSerialService extends Service implements SerialInputOutputManage
     /**
      * Called by SerialInputOutputManager on a background thread whenever new
      * bytes arrive from the USB serial port.
-     *
-     * BUG FIX: totalBytes was incremented outside nmeaLock, creating a data
-     * race with broadcastAll() which reads it under STATE_LOCK.  We use a
-     * volatile long which is sufficient for the single-writer / multiple-reader
-     * pattern here (SerialInputOutputManager calls onNewData serially).
+     * nmeaBuffer, nmeaLock, processSentence() all inherited from AbstractGpsService.
      */
     @Override
     public void onNewData(byte[] data) {
@@ -646,426 +753,9 @@ public class UsbSerialService extends Service implements SerialInputOutputManage
         }
     }
 
-    // -- NMEA sentence processing (called inside nmeaLock) --------------------
-
-    private void processSentence(String sentence) {
-        // Diagnostic TXT messages: log but don't parse as GPS data.
-        if (sentence.startsWith("$GPTXT") || sentence.startsWith("$GNTXT")) {
-            appendSerialLine(NmeaParser.verifyChecksum(sentence)
-                    ? "[TXT] " + sentence : "[BAD CRC] " + sentence);
-            broadcastSerial();
-            return;
-        }
-
-        if (!NmeaParser.verifyChecksum(sentence)) {
-            appendSerialLine("[BAD CRC] " + sentence);
-            broadcastSerial();
-            Log.d(TAG, "BAD CRC: " + sentence);
-            return;
-        }
-
-        // GSV satellite-in-view data
-        if (sentence.contains("GSV")) {
-            List<NmeaParser.SatInfo> sats = NmeaParser.parseGSV(sentence);
-            String[] parts = sentence.split(",", -1);
-            if (parts.length > 2) {
-                String talker = parts[0];
-                String talkerConstellation = NmeaParser.constellationFromTalker(talker);
-                boolean isFirstMsg = "1".equals(parts[2].trim());
-                boolean isLastMsg  = parts.length > 1 && parts[1].trim().equals(parts[2].trim());
-
-                if (isFirstMsg && parts.length > 3 && !parts[3].trim().isEmpty()) {
-                    try {
-                        gsvReportedTotal.put(talker, Integer.parseInt(parts[3].trim()));
-                    } catch (NumberFormatException ignored) {}
-                }
-
-                if (isFirstMsg) {
-                    if ("GNSS".equals(talkerConstellation)) {
-                        gsvCurrentCyclePrns.clear();
-                    }
-                    gsvCurrentCyclePrns.put(talker, new java.util.HashSet<>());
-                }
-
-                if (!sats.isEmpty()) {
-                    java.util.Set<String> cyclePrns = gsvCurrentCyclePrns.computeIfAbsent(
-                            talker, k -> new java.util.HashSet<>());
-                    for (NmeaParser.SatInfo s : sats) {
-                        String key = s.constellation + ":" + s.prn;
-                        seenSats.put(key, s);
-                        cyclePrns.add(key);
-                    }
-                }
-
-                if (isLastMsg) {
-                    java.util.Set<String> seen = gsvCurrentCyclePrns.getOrDefault(
-                            talker, java.util.Collections.emptySet());
-                    String prefix = talkerConstellation + ":";
-                    seenSats.entrySet().removeIf(
-                            e -> e.getKey().startsWith(prefix) && !seen.contains(e.getKey()));
-                }
-
-                updateSatelliteSummary();
-            }
-            appendSerialLine(sentence);
-            broadcastSerial();
-            return;
-        }
-
-        appendSerialLine(sentence);
-        broadcastSerial();
-
-        NmeaParser.GpsData d = NmeaParser.parse(sentence);
-        if (d == null || !d.valid) return;
-
-        totalSents++;
-
-        if ("GGA".equals(d.type)) {
-            satellites       = d.satellites;
-            fixQuality       = d.fixQuality;
-            satsTrackedCount = d.satellites;
-            hasGGASatCount   = true;
-
-            if (d.satellites < 3 || d.fixQuality == 0) {
-                hasGGA = false;
-            } else {
-                latitude         = d.latitude;
-                longitude        = d.longitude;
-                altitude         = d.altitude;
-                hasPosition      = true; // [Bug-4]
-                accuracy         = d.accuracy;
-                hdop             = d.hdop;
-                diffAge          = !Float.isNaN(d.diffAge) ? d.diffAge : diffAge;
-                refStationId     = (d.refStationId != null) ? d.refStationId : refStationId;
-                hasGGA           = true;
-                noFixCount       = 0; // a valid GGA immediately resets the no-fix debounce counter
-                
-                if (!hasRMC && d.gpsTimeMs > 0) {
-                    gpsTimeMs   = d.gpsTimeMs;
-                }
-                lastFixTime = System.currentTimeMillis();
-                
-                if (System.currentTimeMillis() - lastBroadcastTime > 200) {
-                    pushLocation();
-                    broadcastAll();
-                    lastBroadcastTime = System.currentTimeMillis();
-                }
-            }
-        } else if ("RMC".equals(d.type)) {
-            if (d.fixMode == 1) {
-                hasRMC = false;
-            } else {
-                speed   = d.speed;
-                bearing = d.bearing;
-                if (d.gpsTimeMs > 0) {
-                    gpsTimeMs   = d.gpsTimeMs;
-                }
-                lastFixTime = System.currentTimeMillis();
-                
-                if (d.latitude != 0 || d.longitude != 0) {
-                    latitude  = d.latitude;
-                    longitude = d.longitude;
-                }
-                hasRMC = true;
-                if (System.currentTimeMillis() - lastBroadcastTime > 200) {
-                    pushLocation();
-                    broadcastAll();
-                    lastBroadcastTime = System.currentTimeMillis();
-                }
-            }
-        } else if ("GSA".equals(d.type)) {
-            // FIX: store fix mode separately — do NOT mix it into fixQuality.
-            // fixQuality comes from GGA field 6 (0=none,1=GPS,2=DGPS…) and uses
-            // a completely different scale from GSA fixMode (1=none,2=2D,3=3D).
-            fixMode = d.fixMode;
-
-            if (d.fixMode == 1) {
-                // FIX: debounce — require several consecutive no-fix GSA reports
-                // before clearing hasGGA. A single GSA no-fix during acquisition
-                // or a momentary signal dip was previously enough to wipe a valid
-                // GGA fix, causing the visible flicker between "No fix" and "GPS".
-                noFixCount++;
-                if (noFixCount >= 3) {
-                    fixQuality = 0;
-                    fixMode    = 1;
-                    hasGGA     = false;
-                    hasRMC     = false;
-                    Log.d(TAG, "GSA: " + noFixCount + " consecutive no-fix reports — clearing fix state");
-                }
-            } else {
-                // Any valid fix mode resets the counter immediately.
-                noFixCount = 0;
-            }
-
-            // Only adopt GSA DOP when it's more precise than current GGA value.
-            if (d.hdop < hdop) {
-                hdop     = d.hdop;
-                accuracy = Math.max(1.0f, d.hdop * 4.0f);
-            }
-            // Do NOT push location here — GSA doesn't update lat/lon.
-            // Update UI only so DOP/fix-mode label refreshes.
-            broadcastAll();
-        } else if ("VTG".equals(d.type)) {
-            // VTG provides direct speed/course; use as supplement.
-            speed   = d.speed;
-            bearing = d.bearing;
-            // FIX: do NOT push location here — VTG doesn't update lat/lon.
-            broadcastAll();
-        } else if ("GST".equals(d.type)) {
-            gstAccuracy = d.accuracy;
-            lastGstTime = System.currentTimeMillis();
-            broadcastAll();
-        }
-    }
-
-    private float getDisplayAccuracy() {
-        if (gstAccuracy >= 0 && (System.currentTimeMillis() - lastGstTime < 5000)) {
-            return gstAccuracy;
-        }
-        return accuracy;
-    }
-
-    // -- Satellite summary -----------------------------------------------------
-
-    private void updateSatelliteSummary() {
-        Map<String, Integer> byConstellation   = new LinkedHashMap<>();
-        Map<String, int[]>   snrByConstellation = new LinkedHashMap<>(); // [snrSum, satCount]
-
-        for (NmeaParser.SatInfo s : seenSats.values()) {
-            String key = constellationAbbr(s.constellation);
-            byConstellation.put(key, byConstellation.getOrDefault(key, 0) + 1);
-            if (s.snr > 0) {
-                int[] acc = snrByConstellation.get(key);
-                if (acc == null) { acc = new int[]{0, 0}; snrByConstellation.put(key, acc); }
-                acc[0] += s.snr;
-                acc[1]++;
-            } else {
-                snrByConstellation.putIfAbsent(key, new int[]{0, 0});
-            }
-        }
-
-        // Build JSON for SignalBarsView: [{"label":"GPS","avgSnr":38,"count":6}, ...]
-        StringBuilder json = new StringBuilder("[");
-        boolean firstEntry = true;
-        for (Map.Entry<String, Integer> e : byConstellation.entrySet()) {
-            String label    = e.getKey();
-            int    totalSat = e.getValue();
-            int[]  snrAcc   = snrByConstellation.get(label);
-            int    avgSnr   = (snrAcc != null && snrAcc[1] > 0) ? (snrAcc[0] / snrAcc[1]) : 0;
-            if (!firstEntry) json.append(",");
-            json.append("{\"label\":\"").append(label)
-                .append("\",\"avgSnr\":").append(avgSnr)
-                .append(",\"count\":").append(totalSat)
-                .append("}");
-            firstEntry = false;
-        }
-        json.append("]");
-        lastConstellationJson = json.toString();
-
-        int displayUsed = hasGGASatCount ? satsTrackedCount : 0;
-        int reportedTotal = 0;
-        for (int v : gsvReportedTotal.values()) reportedTotal += v;
-        int seen = reportedTotal > 0 ? reportedTotal : seenSats.size();
-        int displaySeen = Math.max(seen, displayUsed);
-
-        StringBuilder sb = new StringBuilder();
-        sb.append(displaySeen).append(" seen \u00B7 ").append(displayUsed).append(" in use");
-        if (!byConstellation.isEmpty()) {
-            sb.append("  ");
-            boolean first = true;
-            for (Map.Entry<String, Integer> e : byConstellation.entrySet()) {
-                if (!first) sb.append(" ");
-                sb.append(e.getKey()).append(":").append(e.getValue());
-                first = false;
-            }
-        }
-        lastSatellites = sb.toString();
-        lastSatsInView = String.valueOf(displaySeen);
-        lastSatsUsed   = hasGGASatCount ? String.valueOf(displayUsed) : "\u2014";
-    }
-
-    private static String constellationAbbr(String name) {
-        if (name == null) return "UNK";
-        switch (name) {
-            case "GPS":     return "GPS";
-            case "GLONASS": return "GLO";
-            case "Galileo": return "GAL";
-            case "BeiDou":  return "BDU";
-            case "QZSS":    return "QZS";
-            case "SBAS":    return "SBS";
-            case "GNSS":    return "GNS";
-            default:        return name.substring(0, Math.min(3, name.length())).toUpperCase();
-        }
-    }
-
-    // -- Location injection ----------------------------------------------------
-
-    private void pushLocation() {
-        if (!hasGGA && !hasRMC) return;
-        if (locationManager == null) return;
-        // FIX: do not inject stale positions into the mock provider. Android's
-        // location engine will reject them anyway once their elapsed-nanos age
-        // exceeds its internal threshold, and doing so ourselves avoids feeding
-        // apps a last-known position that is clearly outdated.
-        long nowMs = System.currentTimeMillis();
-        if (lastFixTime > 0 && nowMs - lastFixTime > STALE_FIX_MS) {
-            Log.d(TAG, "Skipping pushLocation: fix is stale ("
-                    + (nowMs - lastFixTime) + " ms old)");
-            return;
-        }
-        long time  = gpsTimeMs > 0 ? gpsTimeMs : System.currentTimeMillis();
-        long nanos = SystemClock.elapsedRealtimeNanos();
-        pushToProvider(LocationManager.GPS_PROVIDER,     time, nanos);
-        pushToProvider(LocationManager.NETWORK_PROVIDER, time, nanos);
-    }
-
-    private void pushToProvider(String provider, long time, long nanos) {
-        try {
-            Location loc = new Location(provider);
-            loc.setLatitude(latitude);
-            loc.setLongitude(longitude);
-            loc.setAltitude(altitude);
-            loc.setAccuracy(getDisplayAccuracy());
-            loc.setSpeed(speed);
-            loc.setBearing(bearing);
-            loc.setTime(time);
-            loc.setElapsedRealtimeNanos(nanos);
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                float acc = getDisplayAccuracy();
-                loc.setVerticalAccuracyMeters(acc * 1.5f);
-                loc.setSpeedAccuracyMetersPerSecond(acc * 0.1f);
-                loc.setBearingAccuracyDegrees(acc * 2.0f);
-            }
-
-            locationManager.setTestProviderLocation(provider, loc);
-        } catch (Exception e) {
-            Log.w(TAG, "push " + provider + ": " + e.getMessage());
-        }
-    }
-
-    // -- Broadcast helpers -----------------------------------------------------
-
-    private void broadcastConn(String msg) {
-        synchronized (STATE_LOCK) { lastConn = msg; }
-        updateNotification(msg);
-        sendStatusBroadcast(new Intent(ACTION_STATUS).putExtra("conn", msg));
-        Log.d(TAG, msg);
-    }
-
-    // [Impr-8] Cache getDisplayAccuracy() in a local variable
-    private void broadcastAll() {
-        long    nowMs   = System.currentTimeMillis();
-        boolean stale   = (lastFixTime > 0) && (nowMs - lastFixTime > STALE_FIX_MS);
-        String  satStr  = satellites == 1 ? "1 sat" : satellites + " sats";
-        String  fixStr  = stale ? "Stale" : fixLabel(fixQuality);
-        String  latDir  = latitude  >= 0 ? "N" : "S";
-        String  lonDir  = longitude >= 0 ? "E" : "W";
-        float   displayAcc = getDisplayAccuracy(); // compute once
-
-        synchronized (STATE_LOCK) {
-            String diffStr = "";
-            if (fixQuality >= 2 && diffAge >= 0) {
-                diffStr = String.format(Locale.US, "  Age: %.1fs", diffAge) + (!refStationId.isEmpty() ? " [" + refStationId + "]" : "");
-            }
-            lastSignal   = satStr + "  Fix: " + fixStr
-                         + (fixMode == 3 ? " 3D" : fixMode == 2 ? " 2D" : "")
-                         + "  HDOP: " + String.format("%.1f", hdop)
-                         + "  \u00B1" + String.format(displayAcc < 1.0f ? "%.2f" : "%.0f", displayAcc) + " m"
-                         + diffStr;
-            if (lastFixTime > 0) {
-                lastPos = String.format("%.6f\u00B0 %s\n%.6f\u00B0 %s\nAlt: %.1f m",
-                        Math.abs(latitude),  latDir,
-                        Math.abs(longitude), lonDir,
-                        altitude);
-            } else {
-                lastPos = "\u2014";
-            }
-            lastMovement = String.format("Speed: %.1f km/h\nCourse: %.1f\u00B0\nHDOP: %.2f\nFix: %s",
-                           speed * 3.6f, bearing, hdop, fixStr);
-            lastHeading  = String.format("%.1f\u00B0", bearing);
-        }
-
-        updateNotification(String.format("%.5f, %.5f  %s  \u00B1%s m",
-                latitude, longitude, fixStr, String.format(displayAcc < 1.0f ? "%.2f" : "%.0f", displayAcc)));
-
-        sendStatusBroadcast(new Intent(ACTION_STATUS)
-                .putExtra("signal",           lastSignal)
-                .putExtra("position",         lastPos)
-                .putExtra("movement",         lastMovement)
-                .putExtra("serial",           lastSerialLog)
-                .putExtra("satellites",       lastSatellites)
-                .putExtra("bytes",            totalBytes)
-                .putExtra("sents",            totalSents)
-                .putExtra("fixtime",          lastFixTime)
-                .putExtra("satsInView",       lastSatsInView)
-                .putExtra("satsUsed",         lastSatsUsed)
-                .putExtra("heading",          String.format("%.1f\u00B0", bearing))
-                .putExtra("constellationJson", lastConstellationJson)
-                .putExtra("ntripStatus",      lastNtripStatus)
-                .putExtra("lat",              latitude)
-                .putExtra("lon",              longitude));
-    }
-
-    private long lastSerialBroadcast = 0;
-
-    private void broadcastSerial() {
-        long now = System.currentTimeMillis();
-        if (now - lastSerialBroadcast < 200) return;
-        lastSerialBroadcast = now;
-        sendStatusBroadcast(new Intent(ACTION_STATUS)
-                .putExtra("serial",           lastSerialLog)
-                .putExtra("bytes",            totalBytes)
-                .putExtra("sents",            totalSents)
-                .putExtra("satsInView",       lastSatsInView)
-                .putExtra("satsUsed",         lastSatsUsed)
-                .putExtra("satellites",       lastSatellites)
-                .putExtra("constellationJson", lastConstellationJson)
-                .putExtra("ntripStatus",      lastNtripStatus));
-    }
-
-    // -- Serial log ------------------------------------------------------------
-
-    // [Impr-9] Incremental StringBuilder — rebuild only when a line is evicted
-    private void appendSerialLine(String line) {
-        boolean evicted = false;
-        serialLines.addLast(line);
-        if (serialLines.size() > SERIAL_LOG_MAX) {
-            serialLines.removeFirst();
-            evicted = true;
-        }
-        if (evicted) {
-            // Must rebuild after eviction
-            serialLogBuilder.setLength(0);
-            for (String l : serialLines) {
-                if (serialLogBuilder.length() > 0) serialLogBuilder.append('\n');
-                serialLogBuilder.append(l);
-            }
-        } else {
-            if (serialLogBuilder.length() > 0) serialLogBuilder.append('\n');
-            serialLogBuilder.append(line);
-        }
-        lastSerialLog = serialLogBuilder.toString();
-    }
-
-    private void sendStatusBroadcast(Intent intent) {
-        intent.setPackage(getPackageName());
-        sendBroadcast(intent);
-    }
-
-    // -- Fix / compass labels --------------------------------------------------
-
-    private static String fixLabel(int q) {
-        switch (q) {
-            case 1:  return "GPS";
-            case 2:  return "DGPS";
-            case 3:  return "PPS";
-            case 4:  return "RTK Fixed";
-            case 5:  return "RTK Float";
-            case 6:  return "Dead Reckoning";
-            default: return "No fix";
-        }
-    }
+    // processSentence(), getDisplayAccuracy(), updateSatelliteSummary(), constellationAbbr(),
+    // pushLocation(), pushToProvider(), broadcastConn(), broadcastSerial(),
+    // appendSerialLine(), sendStatusBroadcast(), fixLabel() â€” all in AbstractGpsService.
 
     // -- Serial I/O error handling ---------------------------------------------
 
@@ -1095,7 +785,8 @@ public class UsbSerialService extends Service implements SerialInputOutputManage
         }
     }
 
-    private synchronized void stopIo() {
+    @Override
+    protected synchronized void stopIo() {
         if (ntripClient != null) { ntripClient.stop(); ntripClient = null; }
         if (ioManager != null)  { ioManager.stop(); ioManager = null; }
         if (serialPort != null) {
@@ -1128,7 +819,8 @@ public class UsbSerialService extends Service implements SerialInputOutputManage
                 .build();
     }
 
-    private void updateNotification(String text) {
+    @Override
+    protected void updateNotification(String text) {
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) {
             manager.notify(NOTIFICATION_ID, buildNotification(text));
