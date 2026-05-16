@@ -120,6 +120,66 @@ public class BluetoothGpsService extends AbstractGpsService {
     @Override protected void   setLastConstellationJson(String v)  { lastConstellationJson = v; }
     @Override protected String getLastNtripStatus()                { return lastNtripStatus; }
 
+    // -- Broadcast all GPS state to MainActivity --------------------------------
+
+    @Override
+    protected void broadcastAll() {
+        synchronized (nmeaLock) {
+            boolean stale = getLastFixTime() > 0
+                    && System.currentTimeMillis() - getLastFixTime() > STALE_FIX_MS;
+
+            // BT version zeroes displayFixMode when stale (per base-class comment)
+            int displayFixMode = stale ? 1 : fixMode;
+
+            String signal;
+            String pos;
+            String movement;
+
+            if (!hasGGA && !hasRMC) {
+                signal   = "\u2014";
+                pos      = "\u2014";
+                movement = "\u2014";
+            } else if (stale) {
+                signal   = "Stale";
+                pos      = lastPos;
+                movement = "Fix: Stale";
+            } else {
+                signal = fixLabel(fixQuality);
+                pos = String.format(Locale.ROOT, "%.6f\u00B0 %s\n%.6f\u00B0 %s\n%.1f m MSL",
+                        Math.abs(latitude),  latitude  >= 0 ? "N" : "S",
+                        Math.abs(longitude), longitude >= 0 ? "E" : "W",
+                        altitude);
+                String fixStr = displayFixMode == 3 ? "3D " + fixLabel(fixQuality)
+                        : displayFixMode == 2 ? "2D " + fixLabel(fixQuality)
+                        : fixLabel(fixQuality);
+                movement = String.format(Locale.ROOT,
+                        "Speed: %.1f km/h\nCourse: %.0f\u00B0\nHDOP: %.1f\nFix: %s",
+                        speed * 3.6f, bearing, hdop, fixStr);
+            }
+
+            lastSignal   = signal;
+            lastPos      = pos;
+            lastMovement = movement;
+            lastHeading  = String.format(Locale.ROOT, "%.0f\u00B0", bearing);
+
+            sendStatusBroadcast(new Intent(ACTION_STATUS)
+                    .putExtra("signal",   signal)
+                    .putExtra("position", pos)
+                    .putExtra("movement", movement)
+                    .putExtra("heading",  lastHeading)
+                    .putExtra("fixtime",  getLastFixTime())
+                    .putExtra("lat",      latitude)
+                    .putExtra("lon",      longitude)
+                    .putExtra("satsInView",        lastSatsInView)
+                    .putExtra("satsUsed",          lastSatsUsed)
+                    .putExtra("satellites",        lastSatellites)
+                    .putExtra("constellationJson", lastConstellationJson)
+                    .putExtra("ntripStatus",       lastNtripStatus)
+                    .putExtra("bytes",             totalBytes)
+                    .putExtra("sents",             totalSents));
+        }
+    }
+
     /** kept concrete: startIo wraps BT connect/start. */
     @Override protected void startIo() { startConnectThread(); }
 

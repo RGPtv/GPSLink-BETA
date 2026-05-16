@@ -684,9 +684,67 @@ public class UsbSerialService extends AbstractGpsService implements SerialInputO
         }
     }
 
+    // -- Broadcast all GPS state to MainActivity --------------------------------
+
+    @Override
+    protected void broadcastAll() {
+        synchronized (nmeaLock) {
+            boolean stale = getLastFixTime() > 0
+                    && System.currentTimeMillis() - getLastFixTime() > STALE_FIX_MS;
+
+            String signal;
+            String pos;
+            String movement;
+
+            if (!hasGGA && !hasRMC) {
+                signal   = "\u2014";
+                pos      = "\u2014";
+                movement = "\u2014";
+            } else if (stale) {
+                signal   = "Stale";
+                pos      = lastPos;     // keep last known
+                movement = "Fix: Stale";
+            } else {
+                signal = fixLabel(fixQuality);
+                pos = String.format(Locale.ROOT, "%.6f\u00B0 %s\n%.6f\u00B0 %s\n%.1f m MSL",
+                        Math.abs(latitude),  latitude  >= 0 ? "N" : "S",
+                        Math.abs(longitude), longitude >= 0 ? "E" : "W",
+                        altitude);
+                String fixStr = fixMode == 3 ? "3D " + fixLabel(fixQuality)
+                        : fixMode == 2 ? "2D " + fixLabel(fixQuality)
+                        : fixLabel(fixQuality);
+                movement = String.format(Locale.ROOT,
+                        "Speed: %.1f km/h\nCourse: %.0f\u00B0\nHDOP: %.1f\nFix: %s",
+                        speed * 3.6f, bearing, hdop, fixStr);
+            }
+
+            lastSignal   = signal;
+            lastPos      = pos;
+            lastMovement = movement;
+            lastHeading  = String.format(Locale.ROOT, "%.0f\u00B0", bearing);
+
+            sendStatusBroadcast(new Intent(ACTION_STATUS)
+                    .putExtra("signal",   signal)
+                    .putExtra("position", pos)
+                    .putExtra("movement", movement)
+                    .putExtra("heading",  lastHeading)
+                    .putExtra("fixtime",  getLastFixTime())
+                    .putExtra("lat",      latitude)
+                    .putExtra("lon",      longitude)
+                    .putExtra("satsInView",        lastSatsInView)
+                    .putExtra("satsUsed",          lastSatsUsed)
+                    .putExtra("satellites",        lastSatellites)
+                    .putExtra("constellationJson", lastConstellationJson)
+                    .putExtra("ntripStatus",       lastNtripStatus)
+                    .putExtra("bytes",             totalBytes)
+                    .putExtra("sents",             totalSents));
+        }
+    }
+
     // -- Mock location providers -----------------------------------------------
 
-    private void setupMockProviders() {
+    @Override
+    protected void setupMockProviders() {
         if (locationManager == null) {
             Log.w(TAG, "Location service unavailable, skipping mock provider setup");
             return;
@@ -704,7 +762,8 @@ public class UsbSerialService extends AbstractGpsService implements SerialInputO
                 Criteria.ACCURACY_COARSE);
     }
 
-    private void tryAddProvider(String p, int power, int acc) {
+    @Override
+    protected void tryAddProvider(String p, int power, int acc) {
         if (locationManager == null) return;
         try { locationManager.removeTestProvider(p); } catch (Exception ignored) {}
         try {
@@ -718,7 +777,8 @@ public class UsbSerialService extends AbstractGpsService implements SerialInputO
         }
     }
 
-    private void removeProviders() {
+    @Override
+    protected void removeProviders() {
         if (locationManager == null) return;
         try { locationManager.removeTestProvider(LocationManager.GPS_PROVIDER);     } catch (Exception ignored) {}
         try { locationManager.removeTestProvider(LocationManager.NETWORK_PROVIDER); } catch (Exception ignored) {}
