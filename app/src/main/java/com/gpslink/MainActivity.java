@@ -336,12 +336,13 @@ public class MainActivity extends AppCompatActivity {
                 lm.addTestProvider(LocationManager.GPS_PROVIDER,
                         false, false, false, false, true, true, true,
                         android.location.Criteria.POWER_HIGH, android.location.Criteria.ACCURACY_FINE);
-                lm.removeTestProvider(LocationManager.GPS_PROVIDER);
                 isMock = true;
             } catch (SecurityException e) {
                 isMock = false; // permission denied — this app is not the mock location app
             } catch (Exception e) {
                 isMock = false; // unexpected failure — show warning to be safe
+            } finally {
+                try { lm.removeTestProvider(LocationManager.GPS_PROVIDER); } catch (Exception ignored) {}
             }
         }
         card.setVisibility(isMock ? View.GONE : View.VISIBLE);
@@ -581,13 +582,15 @@ public class MainActivity extends AppCompatActivity {
             saveSettings();
 
             // [Issue-2] Broadcast NTRIP config change so running services can hot-reload
-            Intent configChanged = new Intent("com.gpslink.ACTION_NTRIP_CONFIG_CHANGED");
+            Intent configChanged = new Intent(NtripConfig.ACTION_NTRIP_CONFIG_CHANGED);
             configChanged.setPackage(getPackageName());
             sendBroadcast(configChanged);
 
             settingsDialog.dismiss();
         });
 
+        settingsDialog.setCanceledOnTouchOutside(false);
+        settingsDialog.setCancelable(false);
         settingsDialog.show();
     }
 
@@ -1020,7 +1023,7 @@ public class MainActivity extends AppCompatActivity {
             String slog = btRunning ? BluetoothGpsService.lastSerialLog : UsbSerialService.lastSerialLog;
             String sView = btRunning ? BluetoothGpsService.lastSatsInView : UsbSerialService.lastSatsInView;
             String sUsed = btRunning ? BluetoothGpsService.lastSatsUsed : UsbSerialService.lastSatsUsed;
-            long bytes = btRunning ? BluetoothGpsService.totalBytes : UsbSerialService.totalBytes;
+            long bytes = btRunning ? BluetoothGpsService.totalBytes : UsbSerialService.totalBytes.get();
             int sents = btRunning ? BluetoothGpsService.totalSents : UsbSerialService.totalSents;
             long ft = btRunning ? BluetoothGpsService.lastFixTime : UsbSerialService.lastFixTime;
             updateConnection(conn);
@@ -1089,9 +1092,12 @@ public class MainActivity extends AppCompatActivity {
             UsbSerialService.lastSatellites = EM_DASH;
             UsbSerialService.lastSatsInView = EM_DASH;
             UsbSerialService.lastSatsUsed = EM_DASH;
-            UsbSerialService.totalBytes = 0;
+            UsbSerialService.totalBytes.set(0);
             UsbSerialService.totalSents = 0;
             UsbSerialService.lastFixTime = 0;
+
+            UsbSerialService.lastConstellationJson = "";
+            UsbSerialService.lastHeading = "0\u00B0";
 
             BluetoothGpsService.isRunning = false;
             BluetoothGpsService.lastConn = "Idle";
@@ -1105,6 +1111,8 @@ public class MainActivity extends AppCompatActivity {
             BluetoothGpsService.totalBytes = 0;
             BluetoothGpsService.totalSents = 0;
             BluetoothGpsService.lastFixTime = 0;
+            BluetoothGpsService.lastConstellationJson = "";
+            BluetoothGpsService.lastHeading = "0\u00B0";
         }
     }
 
@@ -1181,6 +1189,10 @@ public class MainActivity extends AppCompatActivity {
                 svc.putExtra(BluetoothGpsService.EXTRA_BT_NAME, selectedBtName);
                 ContextCompat.startForegroundService(this, svc);
             }
+        } else if (requestCode == REQUEST_INITIAL_PERMISSIONS) {
+            android.widget.Toast.makeText(this,
+                "Permissions granted. Tap Start to connect your GPS device.",
+                android.widget.Toast.LENGTH_LONG).show();
         }
     }
 

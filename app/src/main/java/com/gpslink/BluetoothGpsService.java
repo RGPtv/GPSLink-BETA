@@ -13,17 +13,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
-import android.location.Criteria;
-import android.location.Location;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
-import android.os.SystemClock;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
-
-import org.json.JSONArray;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,12 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeoutException;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 import java.util.Collections;
 import java.util.concurrent.Executors;
@@ -54,7 +44,7 @@ public class BluetoothGpsService extends AbstractGpsService {
 
     public  static final String EXTRA_BT_ADDRESS = "bt_address";
     public  static final String EXTRA_BT_NAME    = "bt_name";
-    public  static final String ACTION_NTRIP_CONFIG_CHANGED = "com.gpslink.ACTION_NTRIP_CONFIG_CHANGED";
+    // ACTION_NTRIP_CONFIG_CHANGED lives in NtripConfig to avoid duplicates
 
     // SERIAL_LOG_MAX, MAX_AUTO_RETRIES, RETRY_DELAY_MS, STALE_FIX_MS inherited from AbstractGpsService
 
@@ -85,8 +75,8 @@ public class BluetoothGpsService extends AbstractGpsService {
     private InputStream              btInputStream;
     private Thread                   readerThread;
     private String                   connectedDevName = "";
-    private String                   targetAddress    = "";
-    private int                      retryCount       = 0;
+    private static volatile String   targetAddress    = "";
+    private volatile int             retryCount       = 0;
     private final AtomicBoolean      active           = new AtomicBoolean(false);
     private final AtomicBoolean      connecting       = new AtomicBoolean(false);
     private ScheduledExecutorService retryExecutor;
@@ -187,7 +177,7 @@ public class BluetoothGpsService extends AbstractGpsService {
     private final BroadcastReceiver ntripConfigReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context ctx, Intent intent) {
-            if (!ACTION_NTRIP_CONFIG_CHANGED.equals(intent.getAction())) return;
+            if (!NtripConfig.ACTION_NTRIP_CONFIG_CHANGED.equals(intent.getAction())) return;
             Log.d(TAG, "NTRIP config changed \u2014 restarting NtripClient");
             synchronized (BluetoothGpsService.this) {
                 if (ntripClient != null) { ntripClient.stop(); ntripClient = null; }
@@ -214,14 +204,18 @@ public class BluetoothGpsService extends AbstractGpsService {
 
         // [Issue-2] Register NTRIP config changed receiver
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(ntripConfigReceiver, new IntentFilter(ACTION_NTRIP_CONFIG_CHANGED), Context.RECEIVER_NOT_EXPORTED);
+            registerReceiver(ntripConfigReceiver, new IntentFilter(NtripConfig.ACTION_NTRIP_CONFIG_CHANGED), Context.RECEIVER_NOT_EXPORTED);
         } else {
-            registerReceiver(ntripConfigReceiver, new IntentFilter(ACTION_NTRIP_CONFIG_CHANGED));
+            registerReceiver(ntripConfigReceiver, new IntentFilter(NtripConfig.ACTION_NTRIP_CONFIG_CHANGED));
         }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent == null && targetAddress.isEmpty()) {
+            stopSelf(); return START_NOT_STICKY;
+        }
+
         boolean wasRunning = isRunning;
         isRunning = true;
 
@@ -494,7 +488,10 @@ public class BluetoothGpsService extends AbstractGpsService {
         // Close socket FIRST so a blocked read() throws IOException immediately
         if (btSocket != null) { try { btSocket.close(); } catch (IOException ignored) {} btSocket = null; }
         if (readerThread != null) { readerThread.interrupt(); readerThread = null; }
-        if (btInputStream != null) { try { btInputStream.close(); } catch (IOException ignored) {} btInputStream = null; }
+        if (btInputStream != null) {
+            try { btInputStream.close(); } catch (IOException ignored) {}
+            btInputStream = null;
+        }
     }
 
     // -- NMEA data reception --------------------------------------------------

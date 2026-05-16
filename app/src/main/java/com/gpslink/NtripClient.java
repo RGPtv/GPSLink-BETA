@@ -14,6 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 
@@ -51,12 +52,8 @@ public class NtripClient {
     private volatile Socket socket; // [Bug-1] volatile for cross-thread visibility
 
     // [PossIss-3] Scheduled executor for periodic GGA sending
-    private ScheduledExecutorService ggaExecutor;
-    private ScheduledFuture<?> ggaFuture;
-
-    public NtripClient(String host, int port, String mountpoint, String username, String password, NtripListener listener) {
-        this(host, port, mountpoint, username, password, listener, false);
-    }
+    private final AtomicReference<ScheduledExecutorService> ggaExecutor = new AtomicReference<>();
+    private final AtomicReference<ScheduledFuture<?>> ggaFuture = new AtomicReference<>();
 
     /** [Impr-1] Constructor with TLS support param */
     public NtripClient(String host, int port, String mountpoint, String username, String password, NtripListener listener, boolean useTls) {
@@ -84,8 +81,17 @@ public class NtripClient {
     public void stop() {
         isRunning = false;
         // [PossIss-3] Shut down GGA executor
-        if (ggaFuture != null) { ggaFuture.cancel(true); ggaFuture = null; }
-        if (ggaExecutor != null) { ggaExecutor.shutdownNow(); ggaExecutor = null; }
+        ScheduledFuture<?> f = ggaFuture.getAndSet(null);
+        if (f != null) f.cancel(true);
+        ScheduledExecutorService exec = ggaExecutor.getAndSet(null);
+        if (exec != null) exec.shutdownNow();
+
+        // [Bug-1] close socket before joining so blocked reads throw immediately
+        Socket s = socket;
+        if (s != null) {
+            try { s.close(); } catch (Exception ignored) {}
+            socket = null;
+        }
 
         Thread t = thread;
         if (t != null) {
@@ -95,11 +101,6 @@ public class NtripClient {
                 Thread.currentThread().interrupt();
             }
             thread = null;
-        }
-        Socket s = socket;
-        if (s != null) {
-            try { s.close(); } catch (Exception ignored) {}
-            socket = null;
         }
     }
 
@@ -114,7 +115,11 @@ public class NtripClient {
                 // [Impr-1] / [Issue-1] Create plain or TLS socket
                 Socket sock;
                 if (useTls || port == 443) {
-                    sock = SSLSocketFactory.getDefault().createSocket(host, port);
+                    SSLSocket sslSocket = (SSLSocket) SSLSocketFactory.getDefault().createSocket();
+                    sslSocket.connect(new java.net.InetSocketAddress(host, port), 10_000);
+                    sslSocket.setSoTimeout(10_000);
+                    sslSocket.startHandshake();
+                    sock = sslSocket;
                 } else {
                     sock = new Socket();
                     sock.connect(new java.net.InetSocketAddress(host, port), 10_000);
@@ -202,8 +207,9 @@ public class NtripClient {
                 // [PossIss-3] Start periodic GGA sending on a separate scheduled thread
                 // so it fires independently of the read loop (which blocks on is.read())
                 final OutputStream ggaOs = os;
-                ggaExecutor = Executors.newSingleThreadScheduledExecutor();
-                ggaFuture = ggaExecutor.scheduleAtFixedRate(() -> {
+                ScheduledExecutorService newExec = Executors.newSingleThreadScheduledExecutor();
+                ggaExecutor.set(newExec);
+                ScheduledFuture<?> newFuture = newExec.scheduleAtFixedRate(() -> {
                     if (!isRunning) return;
                     String gga = buildGga();
                     if (gga != null) {
@@ -216,6 +222,7 @@ public class NtripClient {
                         }
                     }
                 }, GGA_INTERVAL_MS, GGA_INTERVAL_MS, TimeUnit.MILLISECONDS);
+                ggaFuture.set(newFuture);
 
                 byte[] buffer = new byte[4096];
                 long totalBytes = 0;
@@ -241,8 +248,10 @@ public class NtripClient {
                 }
             } finally {
                 // Stop GGA scheduler for this connection cycle
-                if (ggaFuture != null) { ggaFuture.cancel(true); ggaFuture = null; }
-                if (ggaExecutor != null) { ggaExecutor.shutdownNow(); ggaExecutor = null; }
+                ScheduledFuture<?> f2 = ggaFuture.getAndSet(null);
+                if (f2 != null) f2.cancel(true);
+                ScheduledExecutorService exec2 = ggaExecutor.getAndSet(null);
+                if (exec2 != null) exec2.shutdownNow();
                 Socket s = socket;
                 if (s != null) {
                     try { s.close(); } catch (Exception ignored) {}

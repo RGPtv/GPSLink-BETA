@@ -178,7 +178,7 @@ public class NmeaParser {
         // wrong — it allowed sentences without the VDOP field, which then caused
         // p[17-1] = p[16] (HDOP) to be read as VDOP. We now require all 3 DOP
         // fields to be present.
-        if (p.length < 18) return null;
+        if (p.length < 17) return null;
 
         int fixMode = parseIntSafe(p[2]);
         if (fixMode < 1) return null;
@@ -187,7 +187,8 @@ public class NmeaParser {
         d.type    = "GSA";
         d.fixMode = fixMode;
         // [Dead-2] pdop/vdop assignments removed — fields no longer exist
-        d.hdop    = parseFloatSafe(p[16]);
+        // p.length==17 means no VDOP field; read HDOP from p[15]
+        d.hdop    = (p.length >= 18) ? parseFloatSafe(p[16]) : parseFloatSafe(p[15]);
 
         // FIX: use the same realistic multiplier as GGA so both sources agree.
         d.accuracy = Math.max(1.0f, d.hdop * 4.0f);

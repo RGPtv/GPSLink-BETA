@@ -10,6 +10,8 @@ import android.content.SharedPreferences;
  */
 public final class NtripConfig {
 
+    public static final String ACTION_NTRIP_CONFIG_CHANGED = "com.gpslink.ACTION_NTRIP_CONFIG_CHANGED";
+
     public final boolean enabled;
     public final String host;
     public final int port;
@@ -30,7 +32,7 @@ public final class NtripConfig {
     }
 
     /** Load NTRIP configuration from the app's SharedPreferences. */
-    public static NtripConfig load(SharedPreferences prefs) {
+    private static NtripConfig load(SharedPreferences prefs) {
         boolean enabled = prefs.getBoolean("ntripEnabled", false);
         String host = prefs.getString("ntripHost", "");
         int port = 2101;

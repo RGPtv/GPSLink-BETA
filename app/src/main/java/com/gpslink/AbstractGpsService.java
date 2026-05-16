@@ -179,15 +179,17 @@ abstract class AbstractGpsService extends Service {
                 }
 
                 if (isFirstMsg) {
+                    String normalizedTalker = constellationAbbr(talkerConstellation);
                     if ("GNSS".equals(talkerConstellation)) {
                         gsvCurrentCyclePrns.clear();
                     }
-                    gsvCurrentCyclePrns.put(talker, new java.util.HashSet<>());
+                    gsvCurrentCyclePrns.put(normalizedTalker, new java.util.HashSet<>());
                 }
 
                 if (!sats.isEmpty()) {
+                    String normalizedTalker = constellationAbbr(talkerConstellation);
                     java.util.Set<String> cyclePrns = gsvCurrentCyclePrns.computeIfAbsent(
-                            talker, k -> new java.util.HashSet<>());
+                            normalizedTalker, k -> new java.util.HashSet<>());
                     for (NmeaParser.SatInfo s : sats) {
                         String key = s.constellation + ":" + s.prn;
                         seenSats.put(key, s);
@@ -196,9 +198,10 @@ abstract class AbstractGpsService extends Service {
                 }
 
                 if (isLastMsg) {
+                    String normalizedTalker = constellationAbbr(talkerConstellation);
                     java.util.Set<String> seen = gsvCurrentCyclePrns.getOrDefault(
-                            talker, java.util.Collections.emptySet());
-                    String prefix = talkerConstellation + ":";
+                            normalizedTalker, java.util.Collections.emptySet());
+                    String prefix = normalizedTalker + ":";
                     seenSats.entrySet().removeIf(
                             e -> e.getKey().startsWith(prefix) && !seen.contains(e.getKey()));
                 }
@@ -273,15 +276,9 @@ abstract class AbstractGpsService extends Service {
             }
         } else if ("GSA".equals(d.type)) {
             // FIX: store fix mode separately — do NOT mix it into fixQuality.
-            // fixQuality comes from GGA field 6 (0=none,1=GPS,2=DGPS…) and uses
-            // a completely different scale from GSA fixMode (1=none,2=2D,3=3D).
             fixMode = d.fixMode;
 
             if (d.fixMode == 1) {
-                // FIX: debounce — require several consecutive no-fix GSA reports
-                // before clearing hasGGA. A single GSA no-fix during acquisition
-                // or a momentary signal dip was previously enough to wipe a valid
-                // GGA fix, causing the visible flicker between "No fix" and "GPS".
                 noFixCount++;
                 if (noFixCount >= 3) {
                     fixQuality = 0;
@@ -291,23 +288,22 @@ abstract class AbstractGpsService extends Service {
                     Log.d(getTag(), "GSA: " + noFixCount + " consecutive no-fix reports — clearing fix state");
                 }
             } else {
-                // Any valid fix mode resets the counter immediately.
                 noFixCount = 0;
             }
 
-            // Only adopt GSA DOP when it's more precise than current GGA value.
             if (d.hdop < hdop) {
                 hdop     = d.hdop;
                 accuracy = Math.max(1.0f, d.hdop * 4.0f);
             }
             // Do NOT push location here — GSA doesn't update lat/lon.
-            broadcastAll();
+            long now = System.currentTimeMillis();
+            if (now - getLastBroadcastTime() > 200) { broadcastAll(); }
         } else if ("VTG".equals(d.type)) {
-            // VTG provides direct speed/course; use as supplement.
             speed   = d.speed;
             bearing = d.bearing;
             // FIX: do NOT push location here — VTG doesn't update lat/lon.
-            broadcastAll();
+            long now = System.currentTimeMillis();
+            if (now - getLastBroadcastTime() > 200) { broadcastAll(); }
         } else if ("GST".equals(d.type)) {
             gstAccuracy = d.accuracy;
             lastGstTime = System.currentTimeMillis();
