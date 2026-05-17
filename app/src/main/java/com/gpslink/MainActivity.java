@@ -1050,6 +1050,7 @@ public class MainActivity extends AppCompatActivity {
     private void resetCards() {
         tvConnection.setText("Idle");
         tvNtripStatus.setText(EM_DASH);
+        tvNtripStatus.setTextColor(0xFF3F3F46);
         if ("bt".equals(connType) && !selectedBtName.isEmpty()) {
             tvLocation.setText(selectedBtName);
         } else {
